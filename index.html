@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic-Tac-Toe AI</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+            background-color: #1e1e2e;
+            color: white;
+        }
+        h1 {
+            color: #ffcc00;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 120px);
+            grid-template-rows: repeat(3, 120px);
+            gap: 5px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .cell {
+            width: 120px;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5em;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            background-color: #333;
+            transition: background 0.3s, transform 0.2s;
+        }
+        .cell:hover {
+            background-color: #444;
+        }
+        .cell.taken {
+            pointer-events: none;
+        }
+        .winner {
+            background-color: #ffcc00 !important;
+            color: black;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #ffcc00;
+        }
+        button {
+            margin-top: 20px;
+            padding: 12px;
+            font-size: 1.2em;
+            cursor: pointer;
+            border: none;
+            background-color: #ffcc00;
+            color: black;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background-color: #e6b800;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Tic-Tac-Toe AI</h1>
+    <div id="status">Player X's Turn</div>
+    <div class="board" id="board"></div>
+    <button onclick="resetGame()">Restart Game</button>
+
+    <script>
+        const board = document.getElementById("board");
+
+        let currentPlayer = "X";
+        let gameBoard = ["", "", "", "", "", "", "", "", ""];
+        let gameActive = true;
+        let botMoves = [];
+        let botData = JSON.parse(localStorage.getItem("botData")) || { gamesPlayed: 0, botMoves: {} };
+
+        function createBoard() {
+            board.innerHTML = "";
+            gameBoard.forEach((value, index) => {
+                const cell = document.createElement("div");
+                cell.classList.add("cell");
+                cell.dataset.index = index;
+                cell.textContent = value;
+                cell.addEventListener("click", handleCellClick);
+                board.appendChild(cell);
+            });
+        }
+
+        function handleCellClick(event) {
+            const index = event.target.dataset.index;
+            if (gameBoard[index] || !gameActive) return;
+
+            gameBoard[index] = currentPlayer;
+            event.target.textContent = currentPlayer;
+            event.target.classList.add("taken");
+
+            if (checkWinner()) {
+                document.getElementById("status").textContent = `🎉 Player ${currentPlayer} Wins!`;
+                highlightWinningCells();
+                gameActive = false;
+                saveGameResult(currentPlayer);
+                setTimeout(resetGame, 2000);
+                return;
+            }
+
+            if (!gameBoard.includes("")) {
+                document.getElementById("status").textContent = "😲 It's a Draw!";
+                gameActive = false;
+                saveGameResult("draw");
+                setTimeout(resetGame, 2000);
+                return;
+            }
+
+            currentPlayer = "O";
+            document.getElementById("status").textContent = `Player O's Turn`;
+            setTimeout(botMove, 500);
+        }
+
+        function botMove() {
+            if (!gameActive) return;
+
+            let bestMove = findBestMove();
+            if (bestMove === undefined) {
+                bestMove = gameBoard.indexOf("");
+            }
+
+            gameBoard[bestMove] = "O";
+            document.querySelectorAll(".cell")[bestMove].textContent = "O";
+            document.querySelectorAll(".cell")[bestMove].classList.add("taken");
+            botMoves.push(bestMove);
+
+            if (checkWinner()) {
+                document.getElementById("status").textContent = `🤖 Bot Wins!`;
+                highlightWinningCells();
+                gameActive = false;
+                saveGameResult("O");
+                setTimeout(resetGame, 2000);
+                return;
+            }
+
+            if (!gameBoard.includes("")) {
+                document.getElementById("status").textContent = "😲 It's a Draw!";
+                gameActive = false;
+                saveGameResult("draw");
+                setTimeout(resetGame, 2000);
+                return;
+            }
+
+            currentPlayer = "X";
+            document.getElementById("status").textContent = `Player X's Turn`;
+        }
+
+        function findBestMove() {
+            let emptyCells = gameBoard.map((val, idx) => val === "" ? idx : null).filter(val => val !== null);
+            let weightedMoves = emptyCells.map(move => {
+                let moveData = botData.botMoves[move] || { count: 0, outcome: "neutral" };
+                let weight = moveData.count - (moveData.outcome === "loss" ? 5 : 0);
+                return { move, weight };
+            });
+
+            weightedMoves.sort((a, b) => b.weight - a.weight);
+            return weightedMoves[0]?.move;
+        }
+
+        
+        function checkWinner() {
+    const winPatterns = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8], 
+        [0, 3, 6], [1, 4, 7], [2, 5, 8], 
+        [0, 4, 8], [2, 4, 6]
+    ];
+
+    for (const pattern of winPatterns) {
+        const [a, b, c] = pattern;
+        if (gameBoard[a] && gameBoard[a] === gameBoard[b] && gameBoard[a] === gameBoard[c]) {
+            highlightWinningCells(pattern); // Now always receives a valid array
+            return true;
+        }
+    }
+    return false;
+}
+
+function highlightWinningCells(pattern) {
+    if (!pattern) return; // Prevents error when no winner is found
+    pattern.forEach(index => {
+        document.querySelectorAll(".cell")[index].classList.add("winner");
+    });
+}
+        function saveGameResult(winner) {
+            botData.gamesPlayed += 1;
+            botMoves.forEach(move => {
+                if (!botData.botMoves[move]) botData.botMoves[move] = { count: 0, outcome: "neutral" };
+                botData.botMoves[move].count += 1;
+                botData.botMoves[move].outcome = winner === "O" ? "win" : "loss";
+            });
+
+            localStorage.setItem("botData", JSON.stringify(botData));
+        }
+
+        function resetGame() {
+            gameBoard = Array(9).fill("");
+            botMoves = [];
+            currentPlayer = "X";
+            gameActive = true;
+            document.getElementById("status").textContent = "Player X's Turn";
+            createBoard();
+        }
+
+        createBoard();
+    </script>
+
+</body>
+</html>
