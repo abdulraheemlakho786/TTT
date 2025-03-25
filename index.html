@@ -80,8 +80,6 @@
         let currentPlayer = "X";
         let gameBoard = ["", "", "", "", "", "", "", "", ""];
         let gameActive = true;
-        let botMoves = [];
-        let botData = JSON.parse(localStorage.getItem("botData")) || { gamesPlayed: 0, botMoves: {} };
 
         function createBoard() {
             board.innerHTML = "";
@@ -107,7 +105,6 @@
                 document.getElementById("status").textContent = `🎉 Player ${currentPlayer} Wins!`;
                 highlightWinningCells();
                 gameActive = false;
-                saveGameResult(currentPlayer);
                 setTimeout(resetGame, 2000);
                 return;
             }
@@ -115,7 +112,6 @@
             if (!gameBoard.includes("")) {
                 document.getElementById("status").textContent = "😲 It's a Draw!";
                 gameActive = false;
-                saveGameResult("draw");
                 setTimeout(resetGame, 2000);
                 return;
             }
@@ -129,20 +125,14 @@
             if (!gameActive) return;
 
             let bestMove = findBestMove();
-            if (bestMove === undefined) {
-                bestMove = gameBoard.indexOf("");
-            }
-
             gameBoard[bestMove] = "O";
             document.querySelectorAll(".cell")[bestMove].textContent = "O";
             document.querySelectorAll(".cell")[bestMove].classList.add("taken");
-            botMoves.push(bestMove);
 
             if (checkWinner()) {
                 document.getElementById("status").textContent = `🤖 Bot Wins!`;
                 highlightWinningCells();
                 gameActive = false;
-                saveGameResult("O");
                 setTimeout(resetGame, 2000);
                 return;
             }
@@ -150,7 +140,6 @@
             if (!gameBoard.includes("")) {
                 document.getElementById("status").textContent = "😲 It's a Draw!";
                 gameActive = false;
-                saveGameResult("draw");
                 setTimeout(resetGame, 2000);
                 return;
             }
@@ -160,19 +149,22 @@
         }
 
         function findBestMove() {
-            let emptyCells = gameBoard.map((val, idx) => val === "" ? idx : null).filter(val => val !== null);
-            let weightedMoves = emptyCells.map(move => {
-                let moveData = botData.botMoves[move] || { count: 0, outcome: "neutral" };
-                let weight = moveData.count - (moveData.outcome === "loss" ? 5 : 0);
-                return { move, weight };
-            });
-
-            weightedMoves.sort((a, b) => b.weight - a.weight);
-            return weightedMoves[0]?.move;
+            let bestScore = -Infinity;
+            let move;
+            for (let i = 0; i < gameBoard.length; i++) {
+                if (gameBoard[i] === "") {
+                    gameBoard[i] = "O";
+                    let score = minimax(gameBoard, 0, false);
+                    gameBoard[i] = "";
+                    if (score > bestScore) {
+                        bestScore = score;
+                        move = i;
+                    }
+                }
+            }
+            return move;
         }
-
-        
-        function checkWinner() {
+function checkWinner() {
     const winPatterns = [
         [0, 1, 2], [3, 4, 5], [6, 7, 8], 
         [0, 3, 6], [1, 4, 7], [2, 5, 8], 
@@ -182,33 +174,67 @@
     for (const pattern of winPatterns) {
         const [a, b, c] = pattern;
         if (gameBoard[a] && gameBoard[a] === gameBoard[b] && gameBoard[a] === gameBoard[c]) {
-            highlightWinningCells(pattern); // Now always receives a valid array
+            highlightWinningCells(pattern);
             return true;
         }
     }
     return false;
 }
+        function minimax(board, depth, isMaximizing) {
+            let result = checkWinState();
+            if (result !== null) return result === "O" ? 10 - depth : result === "X" ? depth - 10 : 0;
 
-function highlightWinningCells(pattern) {
-    if (!pattern) return; // Prevents error when no winner is found
-    pattern.forEach(index => {
-        document.querySelectorAll(".cell")[index].classList.add("winner");
-    });
-}
-        function saveGameResult(winner) {
-            botData.gamesPlayed += 1;
-            botMoves.forEach(move => {
-                if (!botData.botMoves[move]) botData.botMoves[move] = { count: 0, outcome: "neutral" };
-                botData.botMoves[move].count += 1;
-                botData.botMoves[move].outcome = winner === "O" ? "win" : "loss";
+            if (isMaximizing) {
+                let bestScore = -Infinity;
+                for (let i = 0; i < board.length; i++) {
+                    if (board[i] === "") {
+                        board[i] = "O";
+                        let score = minimax(board, depth + 1, false);
+                        board[i] = "";
+                        bestScore = Math.max(score, bestScore);
+                    }
+                }
+                return bestScore;
+            } else {
+                let bestScore = Infinity;
+                for (let i = 0; i < board.length; i++) {
+                    if (board[i] === "") {
+                        board[i] = "X";
+                        let score = minimax(board, depth + 1, true);
+                        board[i] = "";
+                        bestScore = Math.min(score, bestScore);
+                    }
+                }
+                return bestScore;
+            }
+        }
+
+        function checkWinState() {
+            const winPatterns = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], 
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], 
+                [0, 4, 8], [2, 4, 6]
+            ];
+
+            for (const pattern of winPatterns) {
+                const [a, b, c] = pattern;
+                if (gameBoard[a] && gameBoard[a] === gameBoard[b] && gameBoard[a] === gameBoard[c]) {
+                    return gameBoard[a];
+                }
+            }
+            return gameBoard.includes("") ? null : "draw";
+        }
+
+        function highlightWinningCells() {
+            document.querySelectorAll(".cell").forEach(cell => {
+                if (cell.textContent === currentPlayer) {
+                    cell.classList.add("winner");
+                }
             });
-
-            localStorage.setItem("botData", JSON.stringify(botData));
         }
 
         function resetGame() {
             gameBoard = Array(9).fill("");
-            botMoves = [];
             currentPlayer = "X";
             gameActive = true;
             document.getElementById("status").textContent = "Player X's Turn";
